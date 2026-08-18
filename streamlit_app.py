@@ -13,7 +13,6 @@ load_dotenv()
 st.set_page_config(page_title="RAG Ingest PDF", page_icon="📄", layout="centered")
 
 
-@st.cache_resource
 def get_inngest_client() -> inngest.Inngest:
     return inngest.Inngest(app_id="rag_app", is_production=False)
 
