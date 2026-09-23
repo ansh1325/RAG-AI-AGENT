@@ -1,42 +1,58 @@
+import os
+from dotenv import load_dotenv
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams,Distance,PointStruct
+from qdrant_client.models import VectorParams, Distance, PointStruct
+
+load_dotenv()
 
 class QdrantStorage:
-    def __init__(self,url="http://localhost:6333/",collection='docs',dim=768):
-        self.client=QdrantClient(url=url,timeout=30)
-        self.collection=collection
+    def __init__(self, url=None, api_key=None, collection='docs', dim=3072):
+        self.url = url or os.getenv("QDRANT_URL", "http://localhost:6333/")
+        self.api_key = api_key or os.getenv("QDRANT_API_KEY", None)
+        self.collection = collection
+
+        if self.api_key:
+            self.client = QdrantClient(url=self.url, api_key=self.api_key, timeout=30)
+        else:
+            self.client = QdrantClient(url=self.url, timeout=30)
 
         if self.client.collection_exists(self.collection):
             info = self.client.get_collection(self.collection)
             current_dim = getattr(info.config.params.vectors, 'size', None)
             if current_dim != dim:
                 self.client.delete_collection(self.collection)
-                self.client.create_collection(collection_name=self.collection,vectors_config=VectorParams(size=dim,distance=Distance.COSINE))
+                self.client.create_collection(
+                    collection_name=self.collection,
+                    vectors_config=VectorParams(size=dim, distance=Distance.COSINE)
+                )
         else:
-            self.client.create_collection(collection_name=self.collection,vectors_config=VectorParams(size=dim,distance=Distance.COSINE))
+            self.client.create_collection(
+                collection_name=self.collection,
+                vectors_config=VectorParams(size=dim, distance=Distance.COSINE)
+            )
 
-    def upsert(self,ids,vectors,payloads):
-        points=[PointStruct(id=ids[i],vector=vectors[i],payload=payloads[i]) for i in range(len(ids))]
-        self.client.upsert(self.collection,points=points)
+    def upsert(self, ids, vectors, payloads):
+        points = [PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i]) for i in range(len(ids))]
+        self.client.upsert(self.collection, points=points)
 
-    def search(self,query_vector,top_k:int=5):
-        response=self.client.query_points(
+    def search(self, query_vector, top_k: int = 5):
+        response = self.client.query_points(
             collection_name=self.collection,
             query=query_vector,
             with_payload=True,
             limit=top_k
         )
-        results=response.points
+        results = response.points
 
-        contexts=[]
-        sources=set()
+        contexts = []
+        sources = set()
 
         for r in results:
-            payload=getattr(r,'payload',None) or {}
-            text=payload.get("text","")
-            source=payload.get("source","")
+            payload = getattr(r, 'payload', None) or {}
+            text = payload.get("text", "")
+            source = payload.get("source", "")
             if text:
                 contexts.append(text)
                 sources.add(source)
 
-        return {"contexts":contexts,"sources":list(sources)}
+        return {"contexts": contexts, "sources": list(sources)}
