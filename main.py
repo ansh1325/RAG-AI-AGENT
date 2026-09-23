@@ -89,16 +89,23 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
 
     def _generate_answer(user_content: str) -> str:
         client = genai.Client()
-        res = client.models.generate_content(
-            model='gemini-3.6-flash',
-            contents=user_content,
-            config=types.GenerateContentConfig(
-                system_instruction="You are a Retrieval Augmented Generation agent. You give accurate answers based on the context provided to you.",
-                temperature=0.2,
-                max_output_tokens=1024,
-            )
-        )
-        return res.text.strip() if res.text else ""
+        models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash']
+        for model_name in models:
+            try:
+                res = client.models.generate_content(
+                    model=model_name,
+                    contents=user_content,
+                    config=types.GenerateContentConfig(
+                        system_instruction="You are a Retrieval Augmented Generation agent. You give accurate answers based on the context provided to you.",
+                        temperature=0.2,
+                        max_output_tokens=1024,
+                    )
+                )
+                if res and res.text:
+                    return res.text.strip()
+            except Exception as e:
+                logging.warning(f"Model {model_name} failed: {e}. Trying next fallback...")
+        return "Sorry, unable to generate an answer at this time."
 
     answer = await ctx.step.run('llm-answer', lambda: _generate_answer(user_content))
     return {'answer': answer, "sources": found.sources, 'num_contexts': len(found.contexts)}

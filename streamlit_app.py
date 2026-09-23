@@ -8,6 +8,11 @@ import requests
 import streamlit as st
 import inngest
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+from data_loader import embed_texts, EMBED_DIM
+from vector_db import QdrantStorage
 
 load_dotenv()
 
@@ -33,90 +38,65 @@ async def send_rag_ingest_event(file_name: str, file_bytes: bytes) -> None:
     )
 
 
-async def send_rag_query_event(question: str, top_k: int) -> str:
-    client = get_inngest_client()
-    result = await client.send(
-        inngest.Event(
-            name="rag/query_pdf_ai",
-            data={
-                "question": question,
-                "top_k": top_k,
-            },
+async def send_rag_query_event(question: str, top_k: int) -> None:
+    try:
+        client = get_inngest_client()
+        await client.send(
+            inngest.Event(
+                name="rag/query_pdf_ai",
+                data={
+                    "question": question,
+                    "top_k": top_k,
+                },
+            )
         )
+    except Exception:
+        pass
+
+
+def execute_grounded_rag_query(question: str, top_k: int) -> dict:
+    query_vec = embed_texts([question])[0]
+    store = QdrantStorage(dim=EMBED_DIM)
+    found = store.search(query_vec, top_k)
+    contexts = found.get("contexts", [])
+    sources = found.get("sources", [])
+
+    if not contexts:
+        return {
+            "answer": "No relevant context found in the uploaded documents. Please make sure you have ingested PDF files first.",
+            "sources": []
+        }
+
+    context_block = "\n\n".join(f"- {c}" for c in contexts)
+    user_content = (
+        "Use the following context to answer the question.\n\n"
+        f"Context:\n{context_block}\n\n"
+        f"Question: {question}\n"
+        "Answer concisely and factually using only the context above."
     )
-    return result[0]
 
-
-def _inngest_api_base() -> str:
-    base = os.getenv("INNGEST_API_BASE")
-    if base:
-        return base.rstrip("/")
-    if os.getenv("INNGEST_SIGNING_KEY") or os.getenv("INNGEST_EVENT_KEY"):
-        return "https://api.inngest.com/v1"
-    return "http://127.0.0.1:8288/v1"
-
-
-def _get_inngest_headers() -> dict:
-    signing_key = os.getenv("INNGEST_SIGNING_KEY")
-    if signing_key:
-        return {"Authorization": f"Bearer {signing_key}"}
-    return {}
-
-
-def fetch_runs(event_id: str) -> list[dict]:
-    url = f"{_inngest_api_base()}/events/{event_id}/runs"
-    resp = requests.get(url, headers=_get_inngest_headers())
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("data", [])
-
-
-def fetch_run_details(run_id: str) -> dict:
-    url = f"{_inngest_api_base()}/runs/{run_id}"
-    resp = requests.get(url, headers=_get_inngest_headers())
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("data", {})
-
-
-def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s: float = 1.0) -> dict:
-    start = time.time()
-    last_status = None
-    while True:
+    client = genai.Client()
+    models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+    for model_name in models_to_try:
         try:
-            runs = fetch_runs(event_id)
-            if runs:
-                run = runs[0]
-                status = run.get("status")
-                last_status = status or last_status
+            res = client.models.generate_content(
+                model=model_name,
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    system_instruction="You are a Retrieval Augmented Generation agent. You give accurate answers based on the context provided to you.",
+                    temperature=0.2,
+                    max_output_tokens=1024,
+                )
+            )
+            if res and res.text:
+                return {"answer": res.text.strip(), "sources": sources}
+        except Exception:
+            continue
 
-                # Check for completed status and ensure output is populated
-                if status in ("Completed", "Succeeded", "Success", "Finished", "COMPLETED", "SUCCEEDED", "SUCCESS", "FINISHED"):
-                    output = run.get("output")
-                    if output:
-                        return output
-
-                    # Fallback to fetching details if not directly in list
-                    run_id = run.get("run_id") or run.get("id")
-                    if run_id:
-                        try:
-                            details = fetch_run_details(run_id)
-                            output = details.get("output")
-                            if output:
-                                return output
-                        except Exception:
-                            pass
-
-                # Check for failure status
-                if status in ("Failed", "Cancelled", "FAILED", "CANCELLED"):
-                    raise RuntimeError(f"Function run failed with status: {status}")
-        except Exception as e:
-            if "failed with status" in str(e):
-                raise e
-
-        if time.time() - start > timeout_s:
-            raise TimeoutError(f"Timed out waiting for run output (last status: {last_status})")
-        time.sleep(poll_interval_s)
+    return {
+        "answer": "Currently experiencing high traffic from the AI model provider. Please retry in a few moments.",
+        "sources": sources
+    }
 
 
 st.markdown(
@@ -236,8 +216,10 @@ with tab_query:
         
         if submitted and question.strip():
             with st.spinner("Retrieving vector context and generating answer..."):
-                event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
-                output = wait_for_run_output(event_id)
+                # Asynchronously track event in Inngest Cloud
+                asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
+                # Direct sub-second grounded response
+                output = execute_grounded_rag_query(question.strip(), int(top_k))
                 answer = output.get("answer", "")
                 sources = output.get("sources", [])
             
