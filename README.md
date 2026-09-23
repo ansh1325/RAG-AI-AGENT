@@ -1,4 +1,4 @@
-# ⚡ Production-Grade PDF RAG Agent with Gemini & Inngest
+# ⚡ Production-Grade RAG Agent with Gemini & Inngest
 
 [🎬 Watch the RAG Pipeline Demo Video on LinkedIn](https://lnkd.in/p/g2MV85E5)
 
@@ -6,7 +6,7 @@ A modern, Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **
 
 ---
 
-## 🚀 Why This Project Stands Out 
+## 🚀 Why Project Stands Out 
 Unlike typical, naive RAG implementations that process everything synchronously (blocking the user and easily failing on large documents), this system uses a **production-ready distributed workflow pattern**:
 * **Resilient Event-Driven Execution**: Uses **Inngest** to decouple document ingestion and querying into background step-functions. If a step fails (e.g., API limit reached or network blip), Inngest automatically retries only the failed step with exponential backoff.
 * **Modern Vector Search**: Leverages Qdrant's new, unified **Query API** (`query_points`) instead of legacy search endpoints, using state-of-the-art `gemini-embedding-2` to embed documents into 3,072-dimensional space.
