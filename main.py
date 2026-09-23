@@ -89,7 +89,7 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
 
     def _generate_answer(user_content: str) -> str:
         client = genai.Client()
-        models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash']
+        models = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-3.6-flash']
         for model_name in models:
             try:
                 res = client.models.generate_content(

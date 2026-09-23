@@ -104,7 +104,7 @@ def execute_grounded_rag_query(question: str, top_k: int) -> dict:
     )
 
     client = genai.Client(api_key=gemini_key)
-    models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-3.6-flash"]
     last_err = None
 
     for model_name in models_to_try:
