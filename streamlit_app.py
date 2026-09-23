@@ -185,7 +185,7 @@ st.markdown(
 )
 
 st.markdown('<p class="gradient-text">⚡ Resilient RAG Agent Portal</p>', unsafe_allow_html=True)
-st.caption("Powered by Inngest, Qdrant, & Google Gemini 2.5 Flash")
+st.caption("Powered by Inngest, Qdrant, & Google Gemini 3.6 Flash")
 
 # Sidebar status display
 with st.sidebar:
@@ -203,7 +203,7 @@ with st.sidebar:
     st.markdown(f'<span class="status-badge status-active">● {qdrant_status}</span>', unsafe_allow_html=True)
     
     st.markdown("**Core AI Models**")
-    st.info("LLM: gemini-2.5-flash\n\nEmbed: gemini-embedding-2")
+    st.info("LLM: gemini-3.6-flash\n\nEmbed: gemini-embedding-2")
     
     st.divider()
     st.caption("Asynchronous, step-orchestrated RAG production architecture.")

@@ -90,7 +90,7 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
     def _generate_answer(user_content: str) -> str:
         client = genai.Client()
         res = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=user_content,
             config=types.GenerateContentConfig(
                 system_instruction="You are a Retrieval Augmented Generation agent. You give accurate answers based on the context provided to you.",
