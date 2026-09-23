@@ -6,17 +6,37 @@ import os
 import requests
 
 import streamlit as st
-import inngest
 from dotenv import load_dotenv
+
+load_dotenv()
+
+# Automatically bridge Streamlit secrets to environment variables
+try:
+    if hasattr(st, "secrets"):
+        for key, val in st.secrets.items():
+            if isinstance(val, str) and key not in os.environ:
+                os.environ[key] = val
+except Exception:
+    pass
+
+import inngest
 from google import genai
 from google.genai import types
 
 from data_loader import embed_texts, EMBED_DIM
 from vector_db import QdrantStorage
 
-load_dotenv()
-
 st.set_page_config(page_title="RAG Ingest PDF", page_icon="📄", layout="centered")
+
+
+def get_gemini_api_key() -> str:
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        try:
+            key = st.secrets.get("GEMINI_API_KEY", "")
+        except Exception:
+            pass
+    return key or ""
 
 
 def get_inngest_client() -> inngest.Inngest:
@@ -55,6 +75,14 @@ async def send_rag_query_event(question: str, top_k: int) -> None:
 
 
 def execute_grounded_rag_query(question: str, top_k: int) -> dict:
+    gemini_key = get_gemini_api_key()
+    if not gemini_key:
+        return {
+            "answer": "⚠️ Error: GEMINI_API_KEY is not configured in Streamlit Secrets. Please add it to your app settings.",
+            "sources": []
+        }
+
+    # Embed and search vector store
     query_vec = embed_texts([question])[0]
     store = QdrantStorage(dim=EMBED_DIM)
     found = store.search(query_vec, top_k)
@@ -63,7 +91,7 @@ def execute_grounded_rag_query(question: str, top_k: int) -> dict:
 
     if not contexts:
         return {
-            "answer": "No relevant context found in the uploaded documents. Please make sure you have ingested PDF files first.",
+            "answer": "No relevant context found in the uploaded documents. Please ingest PDF files first.",
             "sources": []
         }
 
@@ -72,11 +100,13 @@ def execute_grounded_rag_query(question: str, top_k: int) -> dict:
         "Use the following context to answer the question.\n\n"
         f"Context:\n{context_block}\n\n"
         f"Question: {question}\n"
-        "Answer concisely and factually using only the context above."
+        "Answer concisely and accurately using the context above."
     )
 
-    client = genai.Client()
-    models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash"]
+    client = genai.Client(api_key=gemini_key)
+    models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+    last_err = None
+
     for model_name in models_to_try:
         try:
             res = client.models.generate_content(
@@ -90,11 +120,12 @@ def execute_grounded_rag_query(question: str, top_k: int) -> dict:
             )
             if res and res.text:
                 return {"answer": res.text.strip(), "sources": sources}
-        except Exception:
+        except Exception as e:
+            last_err = e
             continue
 
     return {
-        "answer": "Currently experiencing high traffic from the AI model provider. Please retry in a few moments.",
+        "answer": f"Unable to generate response. Error: {last_err}",
         "sources": sources
     }
 
@@ -218,7 +249,7 @@ with tab_query:
             with st.spinner("Retrieving vector context and generating answer..."):
                 # Asynchronously track event in Inngest Cloud
                 asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
-                # Direct sub-second grounded response
+                # Execute grounded response
                 output = execute_grounded_rag_query(question.strip(), int(top_k))
                 answer = output.get("answer", "")
                 sources = output.get("sources", [])
