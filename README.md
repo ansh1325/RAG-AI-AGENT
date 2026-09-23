@@ -1,6 +1,7 @@
 # ⚡ Production-Grade RAG Agent with Gemini & Inngest
 
-[🎬 Watch the RAG Pipeline Demo Video on LinkedIn](https://lnkd.in/p/g2MV85E5)
+🌐 **Live Application:** [rag-pipeline-ai.streamlit.app](https://rag-pipeline-ai.streamlit.app/)  
+🎬 **Demo Video:** [Watch the RAG Pipeline Demo Video on LinkedIn](https://lnkd.in/p/g2MV85E5)
 
 A modern, Retrieval-Augmented Generation (RAG) system built with **FastAPI**, **Inngest** (for asynchronous step-by-step workflow orchestration), **Qdrant** (for vector storage), and **Streamlit** (for the interactive frontend), powered by the **Google GenAI SDK** (`gemini-3.5-flash` and `gemini-embedding-2`).
 
